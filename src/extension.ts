@@ -43,19 +43,31 @@ function updateCommitMessage(repo: Repository) {
 }
 
 function getCommitMessage(branch: string, currentMessage: string, config: ExtensionConfig): string {
-	if (!config.commitMessagePrefixPattern.test(branch)) {
-		return currentMessage;
-	}
+    if (!config.commitMessagePrefixPattern.test(branch)) {
+        return currentMessage;
+    }
+    const prefixMatch = branch.match(config.commitMessagePrefixPattern);
+    if (!prefixMatch) {
+        return currentMessage;
+    }
+    const prefix = prefixMatch[1];
 
-	const prefixMatch = branch.match(config.commitMessagePrefixPattern);
-	if (!prefixMatch) { return currentMessage; }
+    if (currentMessage) {
+        const prefixOldBranchMatch = currentMessage.match(config.commitMessagePrefixPattern);
+        if (prefixOldBranchMatch) {
+            const prefixOldBranch = prefixOldBranchMatch[1]
+            if (prefix != prefixOldBranch) {
+                return currentMessage.replace(prefixOldBranch, prefix)
+            } else {
+                return currentMessage
+            }
+        }
+    }
 
-	const prefix = prefixMatch[1];
-	const formattedMessage = config.commitMessageFormat
-		.replace('${prefix}', prefix)
-		.replace('${message}', currentMessage);
-
-	return formattedMessage;
+    const formattedMessage = config.commitMessageFormat
+        .replace('${prefix}', prefix)
+        .replace('${message}', currentMessage);
+    return formattedMessage;
 }
 
 
