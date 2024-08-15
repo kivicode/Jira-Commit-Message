@@ -37,4 +37,4 @@ Contributions are welcome! Please submit pull requests with any enhancements, bu
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](https://github.com/kivicode/Jira-Commit-Message/LICENSE) file for details.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
