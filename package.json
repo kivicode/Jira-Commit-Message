@@ -6,13 +6,21 @@
     "url": "https://github.com/kivicode/Jira-Commit-Message"
   },
   "description": "A VSCode extension for the automation of the adding of the relevant issue code to each commit message",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "engines": {
     "vscode": "^1.86.0"
   },
   "license": "MIT",
-  "categories": ["Other"],
-  "keywords": ["jira", "prefix", "commit", "issue", "git"],
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "jira",
+    "prefix",
+    "commit",
+    "issue",
+    "git"
+  ],
   "icon": "assets/icon.png",
   "activationEvents": [
     "onStartupFinished",
@@ -29,13 +37,13 @@
       }
     ],
     "menus": {
-			"scm/title": [
-				{
-					"command": "jira-commit-message.update-message",
-					"group": "navigation"
-				}
-			]
-		},
+      "scm/title": [
+        {
+          "command": "jira-commit-message.update-message",
+          "group": "navigation"
+        }
+      ]
+    },
     "configuration": {
       "title": "Jira Commit Message",
       "properties": {
@@ -68,7 +76,7 @@
   "devDependencies": {
     "@types/vscode": "^1.86.0",
     "@types/mocha": "^10.0.6",
-    "@types/node": "18.x",
+    "@types/node": "^18.19.74",
     "@typescript-eslint/eslint-plugin": "^6.19.1",
     "@typescript-eslint/parser": "^6.19.1",
     "eslint": "^8.56.0",
