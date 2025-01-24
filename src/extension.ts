@@ -163,15 +163,17 @@ function updateCommitMessage(repo: Repository, config: ExtensionConfig): void {
     return;
   }
 
-  const currentMessage = repo.inputBox.value;
-  if (config.outdatedPrefixPattern.test(currentMessage)) {
-    repo.inputBox.value = currentMessage.replace(
+  if (config.outdatedPrefixPattern.test(repo.inputBox.value)) {
+    repo.inputBox.value = repo.inputBox.value.replace(
       config.outdatedPrefixPattern,
       "$2"
     );
   }
 
-  repo.inputBox.value = getCommitMessage(branch, currentMessage, config);
+  const updatedMessage = getCommitMessage(branch, repo.inputBox.value, config);
+  if (repo.inputBox.value !== updatedMessage) {
+    repo.inputBox.value = updatedMessage;
+  }
 }
 
 function getCommitMessage(
@@ -189,9 +191,20 @@ function getCommitMessage(
   }
 
   const prefix = prefixMatch[1];
-  return config.commitMessageFormat
+
+  const prefixRegex = new RegExp(`^\\[${prefix}\\]\\s`);
+  if (prefixRegex.test(currentMessage)) {
+    return currentMessage;
+  }
+
+  const withoutExistingPrefix = currentMessage
+    .replace(config.outdatedPrefixPattern, "")
+    .trim();
+  const formattedMessage = config.commitMessageFormat
     .replace("${prefix}", prefix)
-    .replace("${message}", currentMessage);
+    .replace("${message}", withoutExistingPrefix);
+
+  return formattedMessage;
 }
 
 export function activate(context: vscode.ExtensionContext): void {
