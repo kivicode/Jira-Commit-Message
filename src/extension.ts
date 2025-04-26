@@ -102,9 +102,9 @@ class RepositoryWatcher {
     return path.join(gitDir, branchRef);
   }
 
-  private safeUpdateCommitMessage() {
+  private safeUpdateCommitMessage(currentMessage?: string) {
     try {
-      updateCommitMessage(this.repo, this.config);
+      updateCommitMessage(this.repo, this.config, currentMessage);
     } catch (error) {
       this.log(`Error updating commit message: ${(error as Error).message}`);
     }
@@ -114,6 +114,19 @@ class RepositoryWatcher {
     this.outputChannel.appendLine(
       `${LOG_PREFIX} [RepositoryWatcher] ${message}`
     );
+  }
+
+  public updateConfig(newConfig: ExtensionConfig) {
+    const oldConfig = this.config;
+    this.config = newConfig;
+    
+    if (oldConfig.gitHeadWatchInterval !== newConfig.gitHeadWatchInterval) {
+      this.log("Watch interval changed, recreating watchers");
+      this.dispose();
+      this.setupWatchers();
+    }
+    const currentMessage = extractCurrentMessage(this.repo, oldConfig);
+    this.safeUpdateCommitMessage(currentMessage);
   }
 
   public dispose() {
@@ -157,23 +170,27 @@ function getExtensionConfig(): ExtensionConfig {
   };
 }
 
-function updateCommitMessage(repo: Repository, config: ExtensionConfig): void {
+function updateCommitMessage(repo: Repository, config: ExtensionConfig, currentMessage?: string): void {
   const branch: string = repo.state.HEAD?.name ?? "";
   if (!branch) {
     return;
   }
 
-  if (config.outdatedPrefixPattern.test(repo.inputBox.value)) {
-    repo.inputBox.value = repo.inputBox.value.replace(
-      config.outdatedPrefixPattern,
-      "$2"
-    );
+  if (typeof currentMessage === 'undefined') {
+    currentMessage = extractCurrentMessage(repo, config);
   }
 
-  const updatedMessage = getCommitMessage(branch, repo.inputBox.value, config);
+  const updatedMessage = getCommitMessage(branch, currentMessage, config);
   if (repo.inputBox.value !== updatedMessage) {
     repo.inputBox.value = updatedMessage;
   }
+}
+
+function extractCurrentMessage(repo: Repository, config: ExtensionConfig): string {
+  return repo.inputBox.value.replace(
+    config.outdatedPrefixPattern,
+    "$2"
+  );
 }
 
 function getCommitMessage(
@@ -220,16 +237,40 @@ export function activate(context: vscode.ExtensionContext): void {
     return;
   }
   const git = gitExtension.getAPI(1);
-  const config = getExtensionConfig();
+  let config = getExtensionConfig();
 
-  const repoWatchers: RepositoryWatcher[] = git.repositories.map(
-    (repo) => new RepositoryWatcher(repo, config, outputChannel)
-  );
+  const repoWatchers: RepositoryWatcher[] = [];
+
+  const updateRepositoryWatchers = (newConfig: ExtensionConfig) => {
+    for (const watcher of repoWatchers) {
+      watcher.updateConfig(newConfig);
+    }
+  };
+
+  updateRepositoryWatchers(config);
+
+  const configSubscription = vscode.workspace.onDidChangeConfiguration((event) => {
+    if (event.affectsConfiguration("jira-commit-message")) {
+      outputChannel.appendLine(`${LOG_PREFIX} Configuration changed, updating...`);
+      config = getExtensionConfig();
+      updateRepositoryWatchers(config);
+    }
+  });
+
+  const repositorySubscription = git.onDidOpenRepository((repo) => {
+    const watcher = new RepositoryWatcher(repo, config, outputChannel);
+    repoWatchers.push(watcher);
+  });
 
   context.subscriptions.push(
-    new vscode.Disposable(() =>
-      repoWatchers.forEach((watcher) => watcher.dispose())
-    ),
+    configSubscription,
+    repositorySubscription,
+    new vscode.Disposable(() => {
+      while (repoWatchers.length > 0) {
+        const watcher = repoWatchers.pop();
+        watcher?.dispose();
+      }
+    }),
     vscode.commands.registerCommand(
       "jira-commit-message.update-message",
       () => {
