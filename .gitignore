@@ -4,3 +4,5 @@ node_modules
 .vscode-test/
 *.vsix
 test-workspace/
+.history
+.DS_Store

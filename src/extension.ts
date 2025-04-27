@@ -98,7 +98,10 @@ class RepositoryWatcher {
   }
 
   private getBranchRefPath(gitDir: string, headContent: string): string | null {
-    if (!headContent.startsWith("ref:")) return null;
+    if (!headContent.startsWith("ref:")) {
+      return null;
+    }
+
     const branchRef = headContent.split(" ")[1].trim();
     return path.join(gitDir, branchRef);
   }
