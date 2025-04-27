@@ -67,21 +67,30 @@
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",
-    "compile": "tsc -p ./",
-    "watch": "tsc -watch -p ./",
+    "compile": "rimraf out && tsc -p ./",
+    "watch": "rimraf out && tsc -watch -p ./",
     "pretest": "npm run compile && npm run lint",
     "lint": "eslint src --ext ts",
-    "test": "vscode-test"
+    "test": "node ./out/test/runTest.js",
+    "compile:test": "rimraf out && tsc -p ./tsconfig.test.json"
   },
   "devDependencies": {
-    "@types/vscode": "^1.86.0",
     "@types/mocha": "^10.0.6",
     "@types/node": "^18.19.74",
+    "@types/vscode": "^1.86.0",
     "@typescript-eslint/eslint-plugin": "^6.19.1",
     "@typescript-eslint/parser": "^6.19.1",
-    "eslint": "^8.56.0",
-    "typescript": "^5.3.3",
     "@vscode/test-cli": "^0.0.4",
-    "@vscode/test-electron": "^2.3.9"
-  }
+    "@vscode/test-electron": "^2.3.9",
+    "eslint": "^8.56.0",
+    "glob": "^11.0.2",
+    "rimraf": "^6.0.1",
+    "typescript": "^5.3.3"
+  },
+  "contributors": [
+    {
+      "name": "Frederik Claus",
+      "email": "f.v.claus@googlemail.com"
+    }
+  ]
 }
