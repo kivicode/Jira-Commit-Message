@@ -120,7 +120,7 @@ class RepositoryWatcher {
   public updateConfig(newConfig: ExtensionConfig) {
     const oldConfig = this.config;
     this.config = newConfig;
-    
+
     if (oldConfig.gitHeadWatchInterval !== newConfig.gitHeadWatchInterval) {
       this.log("Watch interval changed, recreating watchers");
       this.dispose();
@@ -171,13 +171,17 @@ function getExtensionConfig(): ExtensionConfig {
   };
 }
 
-function updateCommitMessage(repo: Repository, config: ExtensionConfig, currentMessage?: string): void {
+function updateCommitMessage(
+  repo: Repository,
+  config: ExtensionConfig,
+  currentMessage?: string
+): void {
   const branch: string = repo.state.HEAD?.name ?? "";
   if (!branch) {
     return;
   }
 
-  if (typeof currentMessage === 'undefined') {
+  if (typeof currentMessage === "undefined") {
     currentMessage = extractCurrentMessage(repo, config);
   }
 
@@ -188,11 +192,11 @@ function updateCommitMessage(repo: Repository, config: ExtensionConfig, currentM
   }
 }
 
-function extractCurrentMessage(repo: Repository, config: ExtensionConfig): string {
-  return repo.inputBox.value.replace(
-    config.outdatedPrefixPattern,
-    "$2"
-  );
+function extractCurrentMessage(
+  repo: Repository,
+  config: ExtensionConfig
+): string {
+  return repo.inputBox.value.replace(config.outdatedPrefixPattern, "$2");
 }
 
 function getCommitMessage(
@@ -239,7 +243,7 @@ export function activate(context: vscode.ExtensionContext): void {
     return;
   }
   const git = gitExtension.getAPI(1);
-  const config = getExtensionConfig();
+  let config = getExtensionConfig();
 
   const repoWatchers: RepositoryWatcher[] = [];
 
@@ -250,7 +254,9 @@ export function activate(context: vscode.ExtensionContext): void {
   };
 
   const addRepoWatcher = (repo: Repository) => {
-    const existingWatcher = repoWatchers.find(watcher => watcher.repo === repo);
+    const existingWatcher = repoWatchers.find(
+      (watcher) => watcher.repo === repo
+    );
     if (existingWatcher) {
       return;
     }
@@ -260,13 +266,17 @@ export function activate(context: vscode.ExtensionContext): void {
 
   updateRepositoryWatchers(config);
 
-  const configSubscription = vscode.workspace.onDidChangeConfiguration((event) => {
-    if (event.affectsConfiguration("jira-commit-message")) {
-      outputChannel.appendLine(`${LOG_PREFIX} Configuration changed, updating...`);
-      config = getExtensionConfig();
-      updateRepositoryWatchers(config);
+  const configSubscription = vscode.workspace.onDidChangeConfiguration(
+    (event) => {
+      if (event.affectsConfiguration("jira-commit-message")) {
+        outputChannel.appendLine(
+          `${LOG_PREFIX} Configuration changed, updating...`
+        );
+        config = getExtensionConfig();
+        updateRepositoryWatchers(config);
+      }
     }
-  });
+  );
 
   const repositorySubscription = git.onDidOpenRepository(addRepoWatcher);
 
