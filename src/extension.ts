@@ -239,7 +239,7 @@ export function activate(context: vscode.ExtensionContext): void {
     return;
   }
   const git = gitExtension.getAPI(1);
-  let config = getExtensionConfig();
+  const config = getExtensionConfig();
 
   const repoWatchers: RepositoryWatcher[] = [];
 
