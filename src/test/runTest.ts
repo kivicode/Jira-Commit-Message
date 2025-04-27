@@ -18,7 +18,7 @@ async function main() {
       extensionDevelopmentPath, 
       extensionTestsPath,
       version: '1.86.0',
-      launchArgs: [workspaceFolder]
+      launchArgs: ['--disable-gpu', workspaceFolder]
     });
   } catch (err) {
     console.error('Failed to run tests', err);

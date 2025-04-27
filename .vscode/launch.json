@@ -29,7 +29,7 @@
 			"preLaunchTask": "npm: compile",
 			"env": {
 				"VSCODE_DISABLE_EXTENSIONS": "true",
-				"DEBUG": "true"
+				"DISABLE_TIMEOUTS": "true"
 			}
 		}
 	]

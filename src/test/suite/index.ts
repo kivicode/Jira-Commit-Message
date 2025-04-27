@@ -2,11 +2,15 @@ import * as path from 'path';
 import Mocha from 'mocha';
 import { glob } from 'glob';
 
+
+const disableTimeouts = process.env.DISABLE_TIMEOUTS === 'true';
+
 export function run(): Promise<void> {
   // Create the mocha test
   const mocha = new Mocha({
     ui: 'tdd',
-    color: true
+    color: true,
+    timeout: disableTimeouts? 0 : 2000
   });
 
   const testsRoot = path.resolve(__dirname, '..');
