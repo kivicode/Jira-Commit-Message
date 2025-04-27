@@ -105,7 +105,7 @@ class RepositoryWatcher {
 
   private safeUpdateCommitMessage(currentMessage?: string) {
     try {
-      updateCommitMessage(this.repo, this.config, this.outputChannel, currentMessage);
+      updateCommitMessage(this.repo, this.config, currentMessage);
     } catch (error) {
       this.log(`Error updating commit message: ${(error as Error).message}`);
     }
@@ -171,7 +171,7 @@ function getExtensionConfig(): ExtensionConfig {
   };
 }
 
-function updateCommitMessage(repo: Repository, config: ExtensionConfig, outputChannel: vscode.OutputChannel, currentMessage?: string): void {
+function updateCommitMessage(repo: Repository, config: ExtensionConfig, currentMessage?: string): void {
   const branch: string = repo.state.HEAD?.name ?? "";
   if (!branch) {
     return;
@@ -183,8 +183,6 @@ function updateCommitMessage(repo: Repository, config: ExtensionConfig, outputCh
 
   const updatedMessage = getCommitMessage(branch, currentMessage, config);
 
-  outputChannel.appendLine(`${LOG_PREFIX} Current commit message ${currentMessage}, updatedMessage ${updatedMessage} on branch ${branch}`);
-  
   if (repo.inputBox.value !== updatedMessage) {
     repo.inputBox.value = updatedMessage;
   }
@@ -258,7 +256,7 @@ export function activate(context: vscode.ExtensionContext): void {
     }
     const watcher = new RepositoryWatcher(repo, config, outputChannel);
     repoWatchers.push(watcher);
-  }
+  };
 
   updateRepositoryWatchers(config);
 
@@ -288,7 +286,7 @@ export function activate(context: vscode.ExtensionContext): void {
       () => {
         git.repositories.forEach((repo) => {
           try {
-            updateCommitMessage(repo, config, outputChannel);
+            updateCommitMessage(repo, config);
             outputChannel.appendLine(
               `${LOG_PREFIX} Commit message updated via command.`
             );
