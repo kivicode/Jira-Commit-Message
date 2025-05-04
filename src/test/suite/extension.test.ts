@@ -80,6 +80,10 @@ suite("Jira Commit Message Extension", function () {
         throw new Error("unexpected");
       }
 
+      await updateConfig({
+        commitMessageFormat: "${prefix} ${message}"
+      });
+
       await initializeGitRepository(workspaceFolders[0].uri);
     } catch (e) {
       console.error(e);
@@ -156,7 +160,6 @@ suite("Jira Commit Message Extension", function () {
 
   interface ExtensionConfig {
     commitMessagePrefixPattern?: string;
-    gitHeadWatchInterval?: number;
     commitMessageFormat?: string;
   }
 
@@ -175,11 +178,6 @@ suite("Jira Commit Message Extension", function () {
     updateIfNecessary(
       "commitMessagePrefixPattern",
       extensionConfig.commitMessagePrefixPattern
-    );
-
-    updateIfNecessary(
-      "gitHeadWatchInterval",
-      extensionConfig.gitHeadWatchInterval
     );
 
     updateIfNecessary(
