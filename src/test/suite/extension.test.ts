@@ -1,12 +1,12 @@
 import * as assert from "assert";
 import * as vscode from "vscode";
 
-import { after, before, suite, test, beforeEach } from "mocha";
+import { before, suite, test, beforeEach } from "mocha";
 import { GitExtension } from "../../git";
 
 const disableTimeouts = process.env.DISABLE_TIMEOUTS === "true";
 
-const GIT_WATCH_INTERVAL = 1000;
+const GIT_WAIT_INTERVAL = 1500;
 
 suite("Jira Commit Message Extension", function () {
   this.timeout(disableTimeouts ? 0 : 30000);
@@ -57,7 +57,7 @@ suite("Jira Commit Message Extension", function () {
 
     // Wait for the extension to catch up
     await new Promise((resolve) =>
-      setTimeout(resolve, GIT_WATCH_INTERVAL + 10)
+      setTimeout(resolve, GIT_WAIT_INTERVAL)
     );
   }
 
@@ -74,17 +74,15 @@ suite("Jira Commit Message Extension", function () {
       const git: GitExtension = gitExtension.exports;
       gitApi = git.getAPI(1);
 
-      await updateConfig({
-        gitHeadWatchInterval: GIT_WATCH_INTERVAL,
-        commitMessageFormat: "${prefix} ${message}",
-        commitMessagePrefixPattern: "(PP-\\d+)-.*",
-      });
-
       const workspaceFolders = vscode.workspace.workspaceFolders;
 
       if (workspaceFolders === undefined) {
         throw new Error("unexpected");
       }
+
+      await updateConfig({
+        commitMessageFormat: "${prefix} ${message}"
+      });
 
       await initializeGitRepository(workspaceFolders[0].uri);
     } catch (e) {
@@ -101,6 +99,10 @@ suite("Jira Commit Message Extension", function () {
   });
 
   test("should update commit message when switching to a branch matching prefix pattern", async function () {
+    // Must set patters at start to avoid patterns leaking in from other tests
+    await updateConfig({
+      commitMessagePrefixPattern: "(PP-\\d+)-.*",
+    });
     const repo = gitApi.repositories[0];
 
     repo.inputBox.value = "Test feature implementation";
@@ -109,6 +111,10 @@ suite("Jira Commit Message Extension", function () {
   });
 
   test("should not modify commit message for branches not matching prefix pattern", async function () {
+    // Must set patters at start to avoid patterns leaking in from other tests
+    await updateConfig({
+      commitMessagePrefixPattern: "(PP-\\d+)-.*",
+    });
     const repo = gitApi.repositories[0];
 
     repo.inputBox.value = "Test non matching branch commit";
@@ -154,7 +160,6 @@ suite("Jira Commit Message Extension", function () {
 
   interface ExtensionConfig {
     commitMessagePrefixPattern?: string;
-    gitHeadWatchInterval?: number;
     commitMessageFormat?: string;
   }
 
@@ -173,11 +178,6 @@ suite("Jira Commit Message Extension", function () {
     updateIfNecessary(
       "commitMessagePrefixPattern",
       extensionConfig.commitMessagePrefixPattern
-    );
-
-    updateIfNecessary(
-      "gitHeadWatchInterval",
-      extensionConfig.gitHeadWatchInterval
     );
 
     updateIfNecessary(

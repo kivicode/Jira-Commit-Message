@@ -18,7 +18,7 @@ async function main() {
     await runTests({
       extensionDevelopmentPath,
       extensionTestsPath,
-      version: "1.86.0",
+      version: process.env.VSCODE_VERSION || "1.86.0",
       launchArgs: ["--disable-gpu", workspaceFolder],
     });
   } catch (err) {
