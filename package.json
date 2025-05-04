@@ -56,11 +56,6 @@
           "type": "string",
           "default": "[${prefix}] ${message}",
           "description": "Format for the commit message with prefix. Use ${prefix} for the branch prefix and ${message} for the original commit message."
-        },
-        "jira-commit-message.gitHeadWatchInterval": {
-          "type": "number",
-          "default": 1000,
-          "description": "Interval in milliseconds at which to watch the .git/HEAD file for changes."
         }
       }
     }
