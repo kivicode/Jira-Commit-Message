@@ -1,6 +1,4 @@
 import * as vscode from "vscode";
-import * as path from "path";
-import * as fs from "fs";
 import { GitExtension, Repository } from "./git";
 
 const LOG_PREFIX = "[Jira Commit Message]";
@@ -8,15 +6,13 @@ const LOG_PREFIX = "[Jira Commit Message]";
 interface ExtensionConfig {
   commitMessagePrefixPattern: RegExp;
   commitMessageFormat: string;
-  gitHeadWatchInterval: number;
   outdatedPrefixPattern: RegExp;
 }
 
 class RepositoryWatcher {
   public repo: Repository;
   private config: ExtensionConfig;
-  private gitHeadWatcher?: fs.StatWatcher;
-  private refWatcher?: { path: string; timer: NodeJS.Timeout };
+  private watcher?: vscode.Disposable;
 
   constructor(
     repo: Repository,
@@ -26,89 +22,18 @@ class RepositoryWatcher {
     this.repo = repo;
     this.config = config;
 
-    this.log(`Watching repository: ${this.repo.rootUri.fsPath}`);
+    this.log(`Watching ${this.repo.rootUri}`);
     this.setupWatchers();
     this.safeUpdateCommitMessage(); // Initial update
   }
 
   private setupWatchers() {
-    const gitDir = path.join(this.repo.rootUri.fsPath, ".git");
-    const gitHeadPath = path.join(gitDir, "HEAD");
-
-    // Initialize and store the gitHeadWatcher
-    this.gitHeadWatcher = fs.watchFile(
-      gitHeadPath,
-      { interval: this.config.gitHeadWatchInterval },
-      () => {
-        this.log(`Detected change in HEAD file: ${gitHeadPath}`);
-        this.handleGitHeadChange(gitHeadPath);
-      }
-    );
-
-    // Handle initial branch ref watcher
-    fs.readFile(gitHeadPath, "utf8", (err, headContent) => {
-      if (err) {
-        this.log(`Error reading .git/HEAD: ${err.message}`);
-        return;
-      }
-      const refPath = this.getBranchRefPath(gitDir, headContent);
-      if (refPath) {
-        this.setupRefWatcher(refPath);
-      }
-    });
-  }
-
-  private setupRefWatcher(refPath: string) {
-    // Cleanup any existing ref watcher
-    if (this.refWatcher) {
-      fs.unwatchFile(this.refWatcher.path);
-      clearTimeout(this.refWatcher.timer);
-      this.log(`Stopped watching old ref file: ${this.refWatcher.path}`);
-    }
-
-    // Watch branch ref file using fs.watchFile for interval control
-    fs.watchFile(
-      refPath,
-      { interval: this.config.gitHeadWatchInterval },
-      () => {
-        this.log(`Detected change in branch ref file: ${refPath}`);
-        this.safeUpdateCommitMessage();
-      }
-    );
-
-    // Track the current ref watcher
-    this.log(`Watching branch ref file: ${refPath}`);
-    this.refWatcher = { path: refPath, timer: setTimeout(() => {}, 0) }; // Timer is just a placeholder
-  }
-
-  private handleGitHeadChange(gitHeadPath: string) {
-    fs.readFile(gitHeadPath, "utf8", (err, headContent) => {
-      if (err) {
-        this.log(`Error reading HEAD file: ${err.message}`);
-        return;
-      }
-      const gitDir = path.dirname(gitHeadPath);
-      const refPath = this.getBranchRefPath(gitDir, headContent);
-      this.log(`Headcontent is now ${headContent}`);
-      if (refPath) {
-        this.setupRefWatcher(refPath);
-      }
-      this.safeUpdateCommitMessage();
-    });
-  }
-
-  private getBranchRefPath(gitDir: string, headContent: string): string | null {
-    if (!headContent.startsWith("ref:")) {
-      return null;
-    }
-
-    const branchRef = headContent.split(" ")[1].trim();
-    return path.join(gitDir, branchRef);
+    this.watcher = this.repo.state.onDidChange(() => this.safeUpdateCommitMessage());
   }
 
   private safeUpdateCommitMessage(currentMessage?: string) {
     try {
-      updateCommitMessage(this.repo, this.config, currentMessage);
+      updateCommitMessage(this.repo, this.config, (msg) => this.log(msg), currentMessage);
     } catch (error) {
       this.log(`Error updating commit message: ${(error as Error).message}`);
     }
@@ -123,27 +48,16 @@ class RepositoryWatcher {
   public updateConfig(newConfig: ExtensionConfig) {
     const oldConfig = this.config;
     this.config = newConfig;
-
-    if (oldConfig.gitHeadWatchInterval !== newConfig.gitHeadWatchInterval) {
-      this.log("Watch interval changed, recreating watchers");
-      this.dispose();
-      this.setupWatchers();
-    }
+  
     const currentMessage = extractCurrentMessage(this.repo, oldConfig);
     this.safeUpdateCommitMessage(currentMessage);
   }
 
   public dispose() {
     // Cleanup gitHeadWatcher and file watchers
-    if (this.gitHeadWatcher) {
-      fs.unwatchFile(path.join(this.repo.rootUri.fsPath, ".git", "HEAD"));
-    }
-    if (this.refWatcher) {
-      fs.unwatchFile(this.refWatcher.path);
-      clearTimeout(this.refWatcher.timer);
-      this.log(`Stopped watching branch ref file: ${this.refWatcher.path}`);
-    }
-    this.log(`Stopped watching repository: ${this.repo.rootUri.fsPath}`);
+    this.watcher?.dispose();
+    
+    this.log(`Stopped watching repository: ${this.repo.rootUri}`);
   }
 }
 
@@ -169,18 +83,19 @@ function getExtensionConfig(): ExtensionConfig {
   return {
     commitMessagePrefixPattern: new RegExp(tagPattern),
     commitMessageFormat: msgFormat,
-    outdatedPrefixPattern: new RegExp(outdatedPrefixPattern),
-    gitHeadWatchInterval: config.get<number>("gitHeadWatchInterval", 1000),
+    outdatedPrefixPattern: new RegExp(outdatedPrefixPattern)
   };
 }
 
 function updateCommitMessage(
   repo: Repository,
   config: ExtensionConfig,
+  log: (message: string) => void,
   currentMessage?: string
 ): void {
   const branch: string = repo.state.HEAD?.name ?? "";
   if (!branch) {
+    log(`repo.state.HEAD is empty. Skipping`);
     return;
   }
 
@@ -191,7 +106,10 @@ function updateCommitMessage(
   const updatedMessage = getCommitMessage(branch, currentMessage, config);
 
   if (repo.inputBox.value !== updatedMessage) {
+    log(`Updating commit message "${repo.inputBox.value}" on branch ${branch} to "${updatedMessage}"`);
     repo.inputBox.value = updatedMessage;
+  } else {
+    log(`Commit message on branch ${branch} is already "${updatedMessage}".`);
   }
 }
 
@@ -247,6 +165,11 @@ export function activate(context: vscode.ExtensionContext): void {
   }
   const git = gitExtension.getAPI(1);
   let config = getExtensionConfig();
+  outputChannel.appendLine(
+    `${LOG_PREFIX} Loaded configuration ${JSON.stringify(config)}`
+  );
+
+
 
   const repoWatchers: RepositoryWatcher[] = [];
 
@@ -261,10 +184,19 @@ export function activate(context: vscode.ExtensionContext): void {
       (watcher) => watcher.repo === repo
     );
     if (existingWatcher) {
+      outputChannel.appendLine(`${LOG_PREFIX} Already watching ${repo.rootUri}`);
       return;
-    }
+    } 
     const watcher = new RepositoryWatcher(repo, config, outputChannel);
     repoWatchers.push(watcher);
+  };
+
+  const removeRepoWatcher = (repo: Repository): void => {
+    const index = repoWatchers.findIndex((watcher) => watcher.repo.rootUri.toString() === repo.rootUri.toString());
+    if (index !== -1) {
+      repoWatchers[index].dispose();
+      repoWatchers.splice(index, 1);
+    }
   };
 
   updateRepositoryWatchers(config);
@@ -272,22 +204,31 @@ export function activate(context: vscode.ExtensionContext): void {
   const configSubscription = vscode.workspace.onDidChangeConfiguration(
     (event) => {
       if (event.affectsConfiguration("jira-commit-message")) {
-        outputChannel.appendLine(
-          `${LOG_PREFIX} Configuration changed, updating...`
-        );
         config = getExtensionConfig();
+        outputChannel.appendLine(
+          `${LOG_PREFIX} Configuration changed to ${JSON.stringify(config)}`
+        );
         updateRepositoryWatchers(config);
       }
     }
   );
 
-  const repositorySubscription = git.onDidOpenRepository(addRepoWatcher);
-
-  git.repositories.forEach(addRepoWatcher);
+  (git.state === "initialized"? Promise.resolve() : new Promise<void>((resolve) => {
+    git.onDidChangeState((state) => {
+      if (state === 'initialized') {
+        resolve();
+      }
+    });
+  })).then(
+    () => {
+      git.repositories.forEach(addRepoWatcher);
+      context.subscriptions.push(git.onDidOpenRepository(addRepoWatcher));
+      context.subscriptions.push(git.onDidCloseRepository(removeRepoWatcher));
+    }
+  );
 
   context.subscriptions.push(
     configSubscription,
-    repositorySubscription,
     new vscode.Disposable(() => {
       while (repoWatchers.length > 0) {
         const watcher = repoWatchers.pop();
@@ -299,10 +240,8 @@ export function activate(context: vscode.ExtensionContext): void {
       () => {
         git.repositories.forEach((repo) => {
           try {
-            updateCommitMessage(repo, config);
-            outputChannel.appendLine(
-              `${LOG_PREFIX} Commit message updated via command.`
-            );
+            updateCommitMessage(repo, config, (msg) => outputChannel.appendLine(
+              `${LOG_PREFIX}  ${msg}`));
           } catch (error) {
             outputChannel.appendLine(
               `${LOG_PREFIX} Error executing update command: ${
