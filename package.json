@@ -6,7 +6,7 @@
     "url": "https://github.com/kivicode/Jira-Commit-Message"
   },
   "description": "A VSCode extension for the automation of the adding of the relevant issue code to each commit message",
-  "version": "0.0.7",
+  "version": "0.0.8",
   "engines": {
     "vscode": "^1.86.0"
   },
