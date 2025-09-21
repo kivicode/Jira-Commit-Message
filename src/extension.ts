@@ -6,7 +6,6 @@ const LOG_PREFIX = "[Jira Commit Message]";
 interface ExtensionConfig {
   commitMessagePrefixPattern: RegExp;
   commitMessageFormat: string;
-  outdatedPrefixPattern: RegExp;
 }
 
 class RepositoryWatcher {
@@ -28,12 +27,19 @@ class RepositoryWatcher {
   }
 
   private setupWatchers() {
-    this.watcher = this.repo.state.onDidChange(() => this.safeUpdateCommitMessage());
+    this.watcher = this.repo.state.onDidChange(() =>
+      this.safeUpdateCommitMessage()
+    );
   }
 
   private safeUpdateCommitMessage(currentMessage?: string) {
     try {
-      updateCommitMessage(this.repo, this.config, (msg) => this.log(msg), currentMessage);
+      updateCommitMessage(
+        this.repo,
+        this.config,
+        (msg) => this.log(msg),
+        currentMessage
+      );
     } catch (error) {
       this.log(`Error updating commit message: ${(error as Error).message}`);
     }
@@ -48,15 +54,13 @@ class RepositoryWatcher {
   public updateConfig(newConfig: ExtensionConfig) {
     const oldConfig = this.config;
     this.config = newConfig;
-  
+
     const currentMessage = extractCurrentMessage(this.repo, oldConfig);
     this.safeUpdateCommitMessage(currentMessage);
   }
 
   public dispose() {
-    // Cleanup gitHeadWatcher and file watchers
     this.watcher?.dispose();
-    
     this.log(`Stopped watching repository: ${this.repo.rootUri}`);
   }
 }
@@ -74,16 +78,10 @@ function getExtensionConfig(): ExtensionConfig {
 
   const match = tagPattern.match(/\(([^)]+)\)/);
   const prefixPattern = match ? match[1] : tagPattern;
-  const outdatedPrefixPattern: string = msgFormat
-    .replace("${prefix}", `(${prefixPattern})`)
-    .replace("${message}", "(.*)")
-    .replace(/[\[\]]/g, "\\$&")
-    .replace(/\$/g, "\\$");
 
   return {
     commitMessagePrefixPattern: new RegExp(tagPattern),
     commitMessageFormat: msgFormat,
-    outdatedPrefixPattern: new RegExp(outdatedPrefixPattern)
   };
 }
 
@@ -106,7 +104,9 @@ function updateCommitMessage(
   const updatedMessage = getCommitMessage(branch, currentMessage, config);
 
   if (repo.inputBox.value !== updatedMessage) {
-    log(`Updating commit message "${repo.inputBox.value}" on branch ${branch} to "${updatedMessage}"`);
+    log(
+      `Updating commit message "${repo.inputBox.value}" on branch ${branch} to "${updatedMessage}"`
+    );
     repo.inputBox.value = updatedMessage;
   } else {
     log(`Commit message on branch ${branch} is already "${updatedMessage}".`);
@@ -117,7 +117,24 @@ function extractCurrentMessage(
   repo: Repository,
   config: ExtensionConfig
 ): string {
-  return repo.inputBox.value.replace(config.outdatedPrefixPattern, "$2");
+  const currentValue = repo.inputBox.value;
+  const branch = repo.state.HEAD?.name ?? "";
+
+  if (branch && config.commitMessagePrefixPattern.test(branch)) {
+    const prefixMatch = branch.match(config.commitMessagePrefixPattern);
+    if (prefixMatch) {
+      const expectedPrefix = prefixMatch[1];
+      const expectedFormatted = config.commitMessageFormat
+        .replace("${prefix}", expectedPrefix)
+        .replace("${message}", "");
+
+      if (currentValue.startsWith(expectedFormatted)) {
+        return currentValue.substring(expectedFormatted.length).trim();
+      }
+    }
+  }
+
+  return currentValue;
 }
 
 function getCommitMessage(
@@ -136,14 +153,24 @@ function getCommitMessage(
 
   const prefix = prefixMatch[1];
 
-  const prefixRegex = new RegExp(`^\\[${prefix}\\]\\s`);
-  if (prefixRegex.test(currentMessage)) {
+  const formattedPrefix = config.commitMessageFormat
+    .replace("${prefix}", prefix)
+    .replace("${message}", "")
+    .trim();
+  if (currentMessage.startsWith(formattedPrefix)) {
     return currentMessage;
   }
 
-  const withoutExistingPrefix = currentMessage
-    .replace(config.outdatedPrefixPattern, "")
-    .trim();
+  const expectedFormatted = config.commitMessageFormat
+    .replace("${prefix}", prefix)
+    .replace("${message}", "");
+
+  let withoutExistingPrefix = currentMessage;
+  if (currentMessage.startsWith(expectedFormatted)) {
+    withoutExistingPrefix = currentMessage.substring(expectedFormatted.length);
+  }
+  withoutExistingPrefix = withoutExistingPrefix.trim();
+
   const formattedMessage = config.commitMessageFormat
     .replace("${prefix}", prefix)
     .replace("${message}", withoutExistingPrefix);
@@ -169,8 +196,6 @@ export function activate(context: vscode.ExtensionContext): void {
     `${LOG_PREFIX} Loaded configuration ${JSON.stringify(config)}`
   );
 
-
-
   const repoWatchers: RepositoryWatcher[] = [];
 
   const updateRepositoryWatchers = (newConfig: ExtensionConfig) => {
@@ -184,15 +209,19 @@ export function activate(context: vscode.ExtensionContext): void {
       (watcher) => watcher.repo === repo
     );
     if (existingWatcher) {
-      outputChannel.appendLine(`${LOG_PREFIX} Already watching ${repo.rootUri}`);
+      outputChannel.appendLine(
+        `${LOG_PREFIX} Already watching ${repo.rootUri}`
+      );
       return;
-    } 
+    }
     const watcher = new RepositoryWatcher(repo, config, outputChannel);
     repoWatchers.push(watcher);
   };
 
   const removeRepoWatcher = (repo: Repository): void => {
-    const index = repoWatchers.findIndex((watcher) => watcher.repo.rootUri.toString() === repo.rootUri.toString());
+    const index = repoWatchers.findIndex(
+      (watcher) => watcher.repo.rootUri.toString() === repo.rootUri.toString()
+    );
     if (index !== -1) {
       repoWatchers[index].dispose();
       repoWatchers.splice(index, 1);
@@ -213,19 +242,20 @@ export function activate(context: vscode.ExtensionContext): void {
     }
   );
 
-  (git.state === "initialized"? Promise.resolve() : new Promise<void>((resolve) => {
-    git.onDidChangeState((state) => {
-      if (state === 'initialized') {
-        resolve();
-      }
-    });
-  })).then(
-    () => {
-      git.repositories.forEach(addRepoWatcher);
-      context.subscriptions.push(git.onDidOpenRepository(addRepoWatcher));
-      context.subscriptions.push(git.onDidCloseRepository(removeRepoWatcher));
-    }
-  );
+  (git.state === "initialized"
+    ? Promise.resolve()
+    : new Promise<void>((resolve) => {
+        git.onDidChangeState((state) => {
+          if (state === "initialized") {
+            resolve();
+          }
+        });
+      })
+  ).then(() => {
+    git.repositories.forEach(addRepoWatcher);
+    context.subscriptions.push(git.onDidOpenRepository(addRepoWatcher));
+    context.subscriptions.push(git.onDidCloseRepository(removeRepoWatcher));
+  });
 
   context.subscriptions.push(
     configSubscription,
@@ -240,8 +270,9 @@ export function activate(context: vscode.ExtensionContext): void {
       () => {
         git.repositories.forEach((repo) => {
           try {
-            updateCommitMessage(repo, config, (msg) => outputChannel.appendLine(
-              `${LOG_PREFIX}  ${msg}`));
+            updateCommitMessage(repo, config, (msg) =>
+              outputChannel.appendLine(`${LOG_PREFIX}  ${msg}`)
+            );
           } catch (error) {
             outputChannel.appendLine(
               `${LOG_PREFIX} Error executing update command: ${

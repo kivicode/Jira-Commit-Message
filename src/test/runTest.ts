@@ -18,8 +18,8 @@ async function main() {
     await runTests({
       extensionDevelopmentPath,
       extensionTestsPath,
-      version: process.env.VSCODE_VERSION || "1.86.0",
-      launchArgs: ["--disable-gpu", workspaceFolder],
+      version: process.env.VSCODE_VERSION || "1.95.0",
+      launchArgs: ["--disable-gpu", "--no-sandbox", workspaceFolder],
     });
   } catch (err) {
     console.error("Failed to run tests", err);

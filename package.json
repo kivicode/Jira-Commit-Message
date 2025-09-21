@@ -6,7 +6,7 @@
     "url": "https://github.com/kivicode/Jira-Commit-Message"
   },
   "description": "A VSCode extension for the automation of the adding of the relevant issue code to each commit message",
-  "version": "0.0.8",
+  "version": "0.0.9",
   "engines": {
     "vscode": "^1.86.0"
   },
@@ -70,7 +70,9 @@
     "pretest": "npm run compile && npm run lint",
     "lint": "eslint src --ext ts",
     "test": "node ./out/test/runTest.js",
-    "compile:test": "rimraf out && tsc -p ./tsconfig.json"
+    "compile:test": "rimraf out && tsc -p ./tsconfig.json",
+    "package": "vsce package",
+    "publish": "vsce publish"
   },
   "devDependencies": {
     "@types/mocha": "^10.0.6",

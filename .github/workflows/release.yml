@@ -1,0 +1,106 @@
+name: Release Extension
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g., 1.0.0)'
+        required: true
+        type: string
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20.x'
+
+    - name: Install dependencies
+      run: npm install
+
+    - name: Run lint
+      run: npm run lint
+
+    - name: Run compile
+      run: npm run compile
+
+    - name: Run tests
+      run: xvfb-run -a npm test
+      env:
+        VSCODE_VERSION: '1.95.0'
+
+  release:
+    needs: test
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Get version
+      id: version-check
+      run: |
+        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          # Manual trigger - use input version
+          VERSION="${{ github.event.inputs.version }}"
+          echo "current_version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Manual release for version $VERSION"
+        else
+          # Tag push - extract version from tag (remove 'v' prefix)
+          VERSION=${GITHUB_REF#refs/tags/v}
+          echo "current_version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Release for tag version $VERSION"
+        fi
+
+    - name: Install vsce
+      run: npm install -g @vscode/vsce
+
+    - name: Package extension
+      run: vsce package
+
+    - name: Create GitHub Release
+      id: create-release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: v${{ steps.version-check.outputs.current_version }}
+        release_name: Release v${{ steps.version-check.outputs.current_version }}
+        body: |
+          See [CHANGELOG.md](https://github.com/kivicode/Jira-Commit-Message/blob/main/CHANGELOG.md) for details.
+        draft: false
+        prerelease: false
+
+    - name: Upload Release Asset
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create-release.outputs.upload_url }}
+        asset_path: ./jira-commit-message-${{ steps.version-check.outputs.current_version }}.vsix
+        asset_name: jira-commit-message-${{ steps.version-check.outputs.current_version }}.vsix
+        asset_content_type: application/octet-stream
+
+    - name: Publish to VS Code Marketplace
+      run: vsce publish -p ${{ secrets.VSCODE_MARKETPLACE_TOKEN }}
+      env:
+        VSCE_PAT: ${{ secrets.VSCODE_MARKETPLACE_TOKEN }}
