@@ -5,6 +5,11 @@ on:
     tags:
       - 'v*'
   workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g., 1.0.0)'
+        required: true
+        type: string
 
 jobs:
   test:
@@ -51,14 +56,20 @@ jobs:
     - name: Install dependencies
       run: npm ci
 
-    - name: Get version from tag
+    - name: Get version
       id: version-check
       run: |
-        # Extract version from tag (remove 'v' prefix)
-        TAG_VERSION=${GITHUB_REF#refs/tags/v}
-        echo "current_version=$TAG_VERSION" >> $GITHUB_OUTPUT
-        echo "version_changed=true" >> $GITHUB_OUTPUT
-        echo "Version $TAG_VERSION from tag"
+        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          # Manual trigger - use input version
+          VERSION="${{ github.event.inputs.version }}"
+          echo "current_version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Manual release for version $VERSION"
+        else
+          # Tag push - extract version from tag (remove 'v' prefix)
+          VERSION=${GITHUB_REF#refs/tags/v}
+          echo "current_version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Release for tag version $VERSION"
+        fi
 
     - name: Install vsce
       run: npm install -g @vscode/vsce
