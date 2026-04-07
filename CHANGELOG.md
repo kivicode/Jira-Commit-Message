@@ -1,3 +1,6 @@
+## [0.0.10] (https://github.com/kivicode/Jira-Commit-Message/compare/0.0.9...0.0.10)
+- Remove previous prefix when switching branches
+
 ## [0.0.9] (https://github.com/kivicode/Jira-Commit-Message/compare/0.0.8...0.0.9)
 
 - Fix prefix duplication issue with character class patterns like `[A-Z]+`
