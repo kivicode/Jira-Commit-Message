@@ -9,3 +9,11 @@ vsc-extension-quickstart.md
 **/*.map
 **/*.ts
 **/.vscode-test.*
+test-workspace/
+.history
+.DS_Store
+*.vsix
+*.zip
+.*/
+jira-commit-message-*/
+out/test/
