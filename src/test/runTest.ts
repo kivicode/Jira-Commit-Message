@@ -19,7 +19,11 @@ async function main() {
       extensionDevelopmentPath,
       extensionTestsPath,
       version: process.env.VSCODE_VERSION || "1.95.0",
-      launchArgs: ["--disable-gpu", "--no-sandbox", workspaceFolder],
+      launchArgs: ["--disable-gpu",
+        "--no-sandbox",
+        // Avoids interference with locally installed extensions
+         "--profile-temp",
+         workspaceFolder],
     });
   } catch (err) {
     console.error("Failed to run tests", err);

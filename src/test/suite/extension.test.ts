@@ -269,6 +269,21 @@ suite("Jira Commit Message Extension", function () {
     await assertCommitMessage("[NEW-789] [OLD-123] Some existing work");
   });
 
+  test("should replace existing leading prefix when switching between matching branches", async function () {
+    await updateConfig({
+      commitMessagePrefixPattern: "(PP-\\d+)-.*",
+      commitMessageFormat: "[${prefix}] ${message}",
+    });
+    const repo = gitApi.repositories[0];
+
+    repo.inputBox.value = "Implement branch switch behavior";
+    await switchToBranch("PP-101-first-branch");
+    await assertCommitMessage("[PP-101] Implement branch switch behavior");
+
+    await switchToBranch("PP-202-second-branch");
+    await assertCommitMessage("[PP-202] Implement branch switch behavior");
+  });
+
   test("should work with numeric-only prefixes", async function () {
     // Real scenario: Some teams use just numbers for tickets
     await updateConfig({

@@ -6,6 +6,7 @@ const LOG_PREFIX = "[Jira Commit Message]";
 interface ExtensionConfig {
   commitMessagePrefixPattern: RegExp;
   commitMessageFormat: string;
+  messageExtractionRegex: RegExp;
 }
 
 class RepositoryWatcher {
@@ -56,6 +57,7 @@ class RepositoryWatcher {
     this.config = newConfig;
 
     const currentMessage = extractCurrentMessage(this.repo, oldConfig);
+    // If the prefixPattern is changed, we need to extract the message with the old config.
     this.safeUpdateCommitMessage(currentMessage);
   }
 
@@ -75,13 +77,16 @@ function getExtensionConfig(): ExtensionConfig {
     "commitMessageFormat",
     "[${prefix}] ${message}"
   );
+  const commitMessagePrefixPattern = new RegExp(tagPattern);
 
-  const match = tagPattern.match(/\(([^)]+)\)/);
-  const prefixPattern = match ? match[1] : tagPattern;
-
+  const messageExtractionRegex = createMessageExtractionRegex(
+    msgFormat,
+    commitMessagePrefixPattern
+  );
   return {
-    commitMessagePrefixPattern: new RegExp(tagPattern),
+    commitMessagePrefixPattern,
     commitMessageFormat: msgFormat,
+    messageExtractionRegex: messageExtractionRegex,
   };
 }
 
@@ -100,8 +105,7 @@ function updateCommitMessage(
   if (typeof currentMessage === "undefined") {
     currentMessage = extractCurrentMessage(repo, config);
   }
-
-  const updatedMessage = getCommitMessage(branch, currentMessage, config);
+  const updatedMessage = buildCommitMessage(currentMessage, branch, config);
 
   if (repo.inputBox.value !== updatedMessage) {
     log(
@@ -118,64 +122,89 @@ function extractCurrentMessage(
   config: ExtensionConfig
 ): string {
   const currentValue = repo.inputBox.value;
-  const branch = repo.state.HEAD?.name ?? "";
-
-  if (branch && config.commitMessagePrefixPattern.test(branch)) {
-    const prefixMatch = branch.match(config.commitMessagePrefixPattern);
-    if (prefixMatch) {
-      const expectedPrefix = prefixMatch[1];
-      const expectedFormatted = config.commitMessageFormat
-        .replace("${prefix}", expectedPrefix)
-        .replace("${message}", "");
-
-      if (currentValue.startsWith(expectedFormatted)) {
-        return currentValue.substring(expectedFormatted.length).trim();
-      }
-    }
-  }
-
-  return currentValue;
+  const extractedMessage = extractMessageFromFormattedMessage(currentValue, config);
+  return extractedMessage.trim();
 }
 
-function getCommitMessage(
-  branch: string,
+function buildCommitMessage(
   currentMessage: string,
+  branch: string,
   config: ExtensionConfig
 ): string {
+  
+
+  // Doesn't match branch pattern? Leave as is.
   if (!config.commitMessagePrefixPattern.test(branch)) {
     return currentMessage;
   }
 
   const prefixMatch = branch.match(config.commitMessagePrefixPattern);
   if (!prefixMatch) {
+    // This shouldn't happen. We just checked it.
     return currentMessage;
   }
 
   const prefix = prefixMatch[1];
 
-  const formattedPrefix = config.commitMessageFormat
-    .replace("${prefix}", prefix)
-    .replace("${message}", "")
-    .trim();
-  if (currentMessage.startsWith(formattedPrefix)) {
-    return currentMessage;
-  }
-
-  const expectedFormatted = config.commitMessageFormat
-    .replace("${prefix}", prefix)
-    .replace("${message}", "");
-
-  let withoutExistingPrefix = currentMessage;
-  if (currentMessage.startsWith(expectedFormatted)) {
-    withoutExistingPrefix = currentMessage.substring(expectedFormatted.length);
-  }
-  withoutExistingPrefix = withoutExistingPrefix.trim();
-
+  // Build message according to message format
   const formattedMessage = config.commitMessageFormat
     .replace("${prefix}", prefix)
-    .replace("${message}", withoutExistingPrefix);
+    .replace("${message}", currentMessage);
 
   return formattedMessage;
+}
+
+function extractMessageFromFormattedMessage(
+  message: string,
+  config: ExtensionConfig
+): string {
+  const match = message.match(config.messageExtractionRegex);
+  return match?.groups?.message ?? message;
+}
+
+function createMessageExtractionRegex(
+  format: string,
+  commitMessagePrefixPattern: RegExp
+): RegExp {
+  const prefixToken = "${prefix}";
+  const messageToken = "${message}";
+  const fallbackMessageRegex = /^(?<message>.*)$/;
+
+  if (!format.includes(prefixToken) || !format.includes(messageToken)) {
+    console.error(
+      `${LOG_PREFIX} commitMessageFormat must contain both ${prefixToken} and ${messageToken}. Falling back to message passthrough regex.`
+    );
+    return fallbackMessageRegex;
+  }
+
+  const branchPrefixPattern = getBranchPrefixPattern(commitMessagePrefixPattern);
+  if (!branchPrefixPattern) {
+    console.error(
+      `${LOG_PREFIX} commitMessagePrefixPattern must contain a capture group for the prefix. Falling back to message passthrough regex.`
+    );
+    return fallbackMessageRegex;
+  }
+
+  const escapedFormat = escapeRegExp(format);
+  const patternWithPrefix = escapedFormat.replace(
+    escapeRegExp(prefixToken),
+    `(?:${branchPrefixPattern})`
+  );
+  const fullPattern = patternWithPrefix.replace(
+    escapeRegExp(messageToken),
+    "(?<message>.*)"
+  );
+
+  return new RegExp(`^${fullPattern}$`);
+}
+
+function getBranchPrefixPattern(prefixPattern: RegExp): string | undefined {
+  const firstGroupMatch = prefixPattern.source.match(/\(([^)]+)\)/);
+  return firstGroupMatch?.[1];
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 export function activate(context: vscode.ExtensionContext): void {
@@ -193,7 +222,11 @@ export function activate(context: vscode.ExtensionContext): void {
   const git = gitExtension.getAPI(1);
   let config = getExtensionConfig();
   outputChannel.appendLine(
-    `${LOG_PREFIX} Loaded configuration ${JSON.stringify(config)}`
+    `${LOG_PREFIX} Loaded configuration `+
+    `{commitMessageFormat: '${config.commitMessageFormat}', ` +
+    // Regex can't be printed with JSON.stringify
+    `commitMessagePrefixPattern: ${config.commitMessagePrefixPattern}, ` +
+    `messageExtractionRegex: ${config.messageExtractionRegex}}`
   );
 
   const repoWatchers: RepositoryWatcher[] = [];
